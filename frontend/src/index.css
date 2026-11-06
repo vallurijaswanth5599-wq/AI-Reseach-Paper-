@@ -1,67 +1,25 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  html {
-    color-scheme: dark;
-  }
   body {
-    background-color: #0c0d12;
-    color: #e5e7eb;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-  }
-  h1, h2, h3 {
-    font-family: 'Newsreader', Georgia, serif;
-    letter-spacing: -0.025em;
+    @apply bg-gray-50 dark:bg-navy-950 text-gray-900 dark:text-gray-100;
   }
 }
 
-/* Perspective utilities for floating tilted window */
-.perspective-container {
-  perspective: 1200px;
-}
-
-.tilted-hero-window {
-  transform: rotateX(6deg) rotateY(-1deg) rotateZ(-0.5deg);
-  transform-style: preserve-3d;
-  box-shadow:
-    0 20px 50px -15px rgba(0, 0, 0, 0.7),
-    0 0 0 1px rgba(255, 255, 255, 0.12),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.15);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .animate-cloud-drift,
-  .animate-fade-in,
-  .animate-float-window {
-    animation: none !important;
-    transform: none !important;
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
   }
-}
-
-/* Thin hairline tables */
-.hairline-table {
-  border-collapse: collapse;
-}
-.hairline-table th,
-.hairline-table td {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-/* Scrollbar */
-.scrollbar-thin {
-  scrollbar-width: thin;
-}
-.scrollbar-thin::-webkit-scrollbar {
-  width: 5px;
-}
-.scrollbar-thin::-webkit-scrollbar-track {
-  background: #0c0d12;
-}
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 9999px;
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-gray-100 dark:bg-navy-900;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 dark:bg-navy-700 rounded-full;
+  }
 }

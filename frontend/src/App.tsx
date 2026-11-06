@@ -1,18 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AppProvider } from './context/AppContext';
-import { EditorialLayout } from './components/layout/EditorialLayout';
+import { Layout } from './components/layout/Layout';
 
-// Editorial Pages
-import HomeEditorial from './pages/HomeEditorial';
-import PaperEditorial from './pages/PaperEditorial';
-import MethodEditorial from './pages/MethodEditorial';
-import ResultsEditorial from './pages/ResultsEditorial';
-import DemoEditorial from './pages/DemoEditorial';
-import TeamEditorial from './pages/TeamEditorial';
-import CiteContactEditorial from './pages/CiteContactEditorial';
-
-// Functional Research Workspace Pages
+// Pages
+import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
 import ResearchWorkspace from './pages/ResearchWorkspace';
 import MultiAgentCenter from './pages/MultiAgentCenter';
@@ -32,37 +24,29 @@ export default function App() {
           toastOptions={{
             duration: 3500,
             style: {
-              background: '#12141c',
+              background: '#0F172A',
               color: '#F8FAFC',
-              fontSize: '12px',
-              borderRadius: '9999px',
-              border: '1px solid rgba(255, 255, 255, 0.12)',
-              boxShadow: '0 10px 30px -10px rgba(0,0,0,0.5)',
+              fontSize: '13px',
+              borderRadius: '8px',
+              border: '1px solid #1E293B',
             },
           }}
         />
         <Routes>
-          {/* Universal Dark Editorial Shell */}
-          <Route element={<EditorialLayout />}>
-            {/* Core Editorial Manuscript Pages */}
-            <Route path="/" element={<HomeEditorial />} />
-            <Route path="/paper" element={<PaperEditorial />} />
-            <Route path="/method" element={<MethodEditorial />} />
-            <Route path="/results" element={<ResultsEditorial />} />
-            <Route path="/demo" element={<DemoEditorial />} />
-            <Route path="/team" element={<TeamEditorial />} />
-            <Route path="/cite" element={<CiteContactEditorial />} />
+          {/* Public Landing Page */}
+          <Route path="/" element={<LandingPage />} />
 
-            {/* Functional Research Workspace & Console */}
-            <Route path="/dashboard" element={<div className="max-w-6xl mx-auto px-4 py-8"><Dashboard /></div>} />
-            <Route path="/research" element={<div className="max-w-6xl mx-auto px-4 py-8"><ResearchWorkspace /></div>} />
-            <Route path="/agents" element={<div className="max-w-6xl mx-auto px-4 py-8"><MultiAgentCenter /></div>} />
-            <Route path="/analysis" element={<div className="max-w-6xl mx-auto px-4 py-8"><PaperAnalysis /></div>} />
-            <Route path="/compare" element={<div className="max-w-6xl mx-auto px-4 py-8"><PaperComparison /></div>} />
-            <Route path="/chat" element={<div className="max-w-6xl mx-auto px-4 py-8"><Chatbot /></div>} />
-            <Route path="/review" element={<div className="max-w-6xl mx-auto px-4 py-8"><LiteratureReview /></div>} />
-            <Route path="/projects" element={<div className="max-w-6xl mx-auto px-4 py-8"><SavedProjects /></div>} />
-            <Route path="/settings" element={<div className="max-w-6xl mx-auto px-4 py-8"><Settings /></div>} />
+          {/* SaaS App Shell */}
+          <Route element={<Layout />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/research" element={<ResearchWorkspace />} />
+            <Route path="/agents" element={<MultiAgentCenter />} />
+            <Route path="/analysis" element={<PaperAnalysis />} />
+            <Route path="/compare" element={<PaperComparison />} />
+            <Route path="/chat" element={<Chatbot />} />
+            <Route path="/review" element={<LiteratureReview />} />
+            <Route path="/projects" element={<SavedProjects />} />
+            <Route path="/settings" element={<Settings />} />
           </Route>
 
           {/* Catch-all */}
