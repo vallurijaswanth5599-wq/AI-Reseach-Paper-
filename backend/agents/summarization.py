@@ -3,9 +3,8 @@ Summarization Agent – generates structured summaries for papers using LLM.
 """
 from __future__ import annotations
 
-import json
+import asyncio
 import logging
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,37 +26,48 @@ class SummarizationAgent:
         papers: List[Dict[str, Any]],
         db: Optional[AsyncSession] = None,
     ) -> Dict[int, Dict[str, Any]]:
-        """Summarize all papers. Returns dict of paper_id -> summary."""
+        """Summarize all papers concurrently. Returns dict of paper_id -> summary."""
         logger.info("[SummarizationAgent] Summarizing %d papers", len(papers))
+
+        sem = asyncio.Semaphore(5)
+
+        async def _summarize_single(paper: Dict[str, Any]) -> tuple[Optional[int], Optional[Dict[str, Any]]]:
+            async with sem:
+                paper_id = paper.get("id")
+                if paper_id is None:
+                    return None, None
+
+                # Check for existing summary in DB
+                if db:
+                    try:
+                        existing = await self._get_existing_summary(paper_id, db)
+                        if existing:
+                            return paper_id, existing
+                    except Exception as e:
+                        logger.debug("DB lookup error for summary %s: %s", paper_id, e)
+
+                title = paper.get("title", "Unknown")
+                abstract = paper.get("abstract", "")
+                extracted_text = paper.get("extracted_text", "")
+                content = extracted_text if extracted_text and len(extracted_text) > len(abstract) else abstract
+
+                summary = await llm_service.summarize_paper(title, abstract, content)
+                summary["paper_id"] = paper_id
+
+                if db:
+                    try:
+                        await self._save_summary(paper_id, summary, db)
+                    except Exception as e:
+                        logger.debug("DB save error for summary %s: %s", paper_id, e)
+
+                return paper_id, summary
+
+        results = await asyncio.gather(*[_summarize_single(p) for p in papers], return_exceptions=True)
+
         summaries: Dict[int, Dict[str, Any]] = {}
-
-        for paper in papers:
-            paper_id = paper.get("id")
-            if paper_id is None:
-                continue
-
-            # Check for existing summary in DB
-            if db:
-                existing = await self._get_existing_summary(paper_id, db)
-                if existing:
-                    summaries[paper_id] = existing
-                    continue
-
-            # Generate summary
-            title = paper.get("title", "Unknown")
-            abstract = paper.get("abstract", "")
-            extracted_text = paper.get("extracted_text", "")
-            content = extracted_text if extracted_text and len(extracted_text) > len(abstract) else abstract
-
-            summary = await llm_service.summarize_paper(title, abstract, content)
-            summary["paper_id"] = paper_id
-
-            # Save to DB
-            if db:
-                await self._save_summary(paper_id, summary, db)
-
-            summaries[paper_id] = summary
-            logger.debug("[SummarizationAgent] Summarized paper %d: %s", paper_id, title[:50])
+        for res in results:
+            if isinstance(res, tuple) and res[0] is not None and res[1] is not None:
+                summaries[res[0]] = res[1]
 
         logger.info("[SummarizationAgent] Completed %d summaries", len(summaries))
         return summaries
@@ -102,4 +112,4 @@ class SummarizationAgent:
             db.add(db_summary)
             await db.flush()
         except Exception as exc:
-            logger.error("[SummarizationAgent] DB save error: %s", exc)
+            logger.error("[SummarizationAgent] Failed to save summary: %s", exc)

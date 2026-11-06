@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { Play, Square, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
+import { Play, Square, RotateCcw, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { runAgentWorkflow, getAgentStatus } from '../services/api';
 import { AgentStatusCard } from '../components/ui/AgentStatusCard';
@@ -26,7 +26,7 @@ type ResultTab = 'papers' | 'summaries' | 'gaps' | 'review';
 export default function MultiAgentCenter() {
   const [topic, setTopic] = useState('');
   const [question, setQuestion] = useState('');
-  const [sources, setSources] = useState<string[]>(['arxiv', 'semantic_scholar']);
+  const [sources, setSources] = useState<string[]>(['arxiv', 'semantic_scholar', 'openalex', 'crossref']);
   const [maxResults, setMaxResults] = useState(10);
 
   const [running, setRunning] = useState(false);
@@ -62,7 +62,7 @@ export default function MultiAgentCenter() {
       ...a,
       status: i === 0 ? 'running' : 'pending',
     })));
-    setProgress(0);
+    setProgress(5);
     setShowResults(false);
 
     try {
@@ -75,63 +75,45 @@ export default function MultiAgentCenter() {
       sessionRef.current = session_id;
       toast.success('Agent workflow started!');
 
-      // Poll status
+      // Poll status every 1.2 seconds
       pollRef.current = setInterval(async () => {
         try {
           const status = await getAgentStatus(session_id);
           setAgentStatus(status);
-          setAgents(status.agents);
-          setProgress(status.progress);
+
+          if (status.agents && Array.isArray(status.agents) && status.agents.length > 0) {
+            setAgents(status.agents);
+          }
+          if (typeof status.progress === 'number') {
+            setProgress(status.progress);
+          }
 
           if (status.status === 'completed' || status.status === 'failed') {
             stopPolling();
             setRunning(false);
             setShowResults(true);
             if (status.status === 'completed') {
-              toast.success('Agent workflow completed!');
+              setProgress(100);
+              toast.success('Agent workflow completed successfully!');
             } else {
-              toast.error(`Workflow failed: ${status.error}`);
+              toast.error(`Workflow encountered an error: ${status.error || 'Unknown'}`);
             }
           }
         } catch {
           // Keep polling
         }
-      }, 2000);
+      }, 1200);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to start workflow';
       toast.error(msg);
-      // Demo mode
-      simulateDemoRun();
+      setRunning(false);
     }
-  };
-
-  const simulateDemoRun = () => {
-    let step = 0;
-    const interval = setInterval(() => {
-      setAgents((prev) =>
-        prev.map((a, i) => {
-          if (i < step) return { ...a, status: 'completed' };
-          if (i === step) return { ...a, status: 'running' };
-          return a;
-        })
-      );
-      setProgress(Math.round((step / INITIAL_AGENTS.length) * 100));
-      step++;
-      if (step > INITIAL_AGENTS.length) {
-        clearInterval(interval);
-        setAgents(INITIAL_AGENTS.map((a) => ({ ...a, status: 'completed' })));
-        setProgress(100);
-        setRunning(false);
-        setShowResults(true);
-        toast.success('Demo workflow completed!');
-      }
-    }, 1200);
   };
 
   const handleStop = () => {
     stopPolling();
     setRunning(false);
-    toast('Workflow stopped');
+    toast('Workflow paused');
   };
 
   const handleReset = () => {
@@ -143,18 +125,24 @@ export default function MultiAgentCenter() {
     setShowResults(false);
   };
 
-  const completedCount = agents.filter((a) => a.status === 'completed').length;
+  const completedCount = Array.isArray(agents)
+    ? agents.filter((a) => a.status === 'completed').length
+    : 0;
+
   const papers: Paper[] = (agentStatus?.result?.papers as Paper[]) ?? [];
+  const summaries = (agentStatus?.result?.summaries as Record<string, any>) ?? {};
+  const gaps = (agentStatus?.result?.gaps as string[]) ?? [];
+  const review = (agentStatus?.result?.review as Record<string, any>) ?? (agentStatus?.result?.literature_review as Record<string, any>) ?? null;
 
   return (
     <div className="space-y-6">
       {/* Config Panel */}
       <div className="bg-white dark:bg-navy-900 rounded-2xl border border-gray-200 dark:border-navy-700 p-6">
-        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
           Multi-Agent Research Workflow
         </h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-          Configure your research parameters and let 9 AI agents collaboratively research, analyze, and synthesize academic literature.
+          Configure your research parameters and let 9 specialized AI agents collaboratively plan, retrieve, summarize, compare, and synthesize academic literature.
         </p>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
@@ -166,7 +154,7 @@ export default function MultiAgentCenter() {
               type="text"
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
-              placeholder="e.g., Federated learning for healthcare"
+              placeholder="e.g., Federated learning for healthcare or Data Science"
               className="w-full px-4 py-3 bg-gray-50 dark:bg-navy-800 border border-gray-200 dark:border-navy-700 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
             />
           </div>
@@ -178,7 +166,7 @@ export default function MultiAgentCenter() {
               type="text"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              placeholder="e.g., What are the main privacy challenges?"
+              placeholder="e.g., What are the main privacy and scalability challenges?"
               className="w-full px-4 py-3 bg-gray-50 dark:bg-navy-800 border border-gray-200 dark:border-navy-700 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
             />
           </div>
@@ -225,10 +213,10 @@ export default function MultiAgentCenter() {
           <button
             onClick={handleRun}
             disabled={running}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 text-white rounded-xl font-semibold transition-colors"
+            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 text-white rounded-xl font-semibold transition-colors shadow-md shadow-blue-500/20"
           >
             {running ? <LoadingSpinner size="sm" /> : <Play className="h-4 w-4" />}
-            {running ? 'Running...' : 'Run Full Agent Workflow'}
+            {running ? 'Running Agents...' : 'Run Full Agent Workflow'}
           </button>
           {running && (
             <button
@@ -254,14 +242,15 @@ export default function MultiAgentCenter() {
       {(running || progress > 0) && (
         <div className="bg-white dark:bg-navy-900 rounded-2xl border border-gray-200 dark:border-navy-700 p-4">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              Agent Progress
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+              <span>Agent Progress</span>
+              {progress === 100 && <CheckCircle2 className="h-4 w-4 text-emerald-500 inline" />}
             </p>
             <p className="text-sm font-bold text-blue-500">{progress}%</p>
           </div>
           <div className="h-2 bg-gray-200 dark:bg-navy-800 rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full transition-all duration-500"
+              className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 rounded-full transition-all duration-500"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -281,19 +270,17 @@ export default function MultiAgentCenter() {
         </div>
       </div>
 
-      {/* Results */}
-      {showResults && (
+      {/* Results Section */}
+      {(showResults || agentStatus?.status === 'completed' || papers.length > 0) && (
         <div className="bg-white dark:bg-navy-900 rounded-2xl border border-gray-200 dark:border-navy-700 p-6">
-          <button
-            onClick={() => setShowResults((v) => !v)}
-            className="flex items-center justify-between w-full"
-          >
+          <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-gray-900 dark:text-white">Workflow Results</h3>
-            {showResults ? <ChevronUp className="h-5 w-5 text-gray-500" /> : <ChevronDown className="h-5 w-5 text-gray-500" />}
-          </button>
+            <span className="text-xs text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full font-medium">
+              Completed
+            </span>
+          </div>
 
-          {/* Tabs */}
-          <div className="flex gap-2 mt-4 border-b border-gray-200 dark:border-navy-700">
+          <div className="flex border-b border-gray-200 dark:border-navy-700 gap-1">
             {(['papers', 'summaries', 'gaps', 'review'] as ResultTab[]).map((tab) => (
               <button
                 key={tab}
@@ -323,38 +310,110 @@ export default function MultiAgentCenter() {
                 </p>
               )
             )}
+
             {activeTab === 'summaries' && (
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                {agentStatus?.result ? (
-                  <pre className="whitespace-pre-wrap text-xs bg-gray-50 dark:bg-navy-800 p-4 rounded-xl overflow-auto max-h-80">
-                    {JSON.stringify(agentStatus.result, null, 2)}
-                  </pre>
-                ) : 'Summaries will appear here after workflow completes.'}
+              <div className="space-y-4">
+                {Object.keys(summaries).length > 0 ? (
+                  Object.entries(summaries).map(([paperId, s]: [string, any]) => {
+                    const matchedPaper = papers.find((p) => String(p.id) === String(paperId));
+                    return (
+                      <div key={paperId} className="p-4 bg-gray-50 dark:bg-navy-800 rounded-xl border border-gray-200 dark:border-navy-700">
+                        <h4 className="font-semibold text-gray-900 dark:text-white text-sm mb-2">
+                          {matchedPaper?.title || `Paper #${paperId}`}
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                          <div>
+                            <span className="font-medium text-blue-500 block">Objective:</span>
+                            <p className="text-gray-600 dark:text-gray-300">{s.objective || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <span className="font-medium text-purple-500 block">Methodology:</span>
+                            <p className="text-gray-600 dark:text-gray-300">{s.methodology || 'N/A'}</p>
+                          </div>
+                          <div className="md:col-span-2">
+                            <span className="font-medium text-emerald-500 block">Findings:</span>
+                            <p className="text-gray-600 dark:text-gray-300">{s.findings || s.full_summary || 'N/A'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">
+                    Summaries will appear here after the summarization agent completes.
+                  </p>
+                )}
               </div>
             )}
+
             {activeTab === 'gaps' && (
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                {(agentStatus?.result?.gaps as string[] | undefined)?.length ? (
-                  <ul className="space-y-2">
-                    {(agentStatus!.result!.gaps as string[]).map((gap, i) => (
-                      <li key={i} className="flex items-start gap-2">
-                        <span className="text-blue-500 font-bold">{i + 1}.</span>
-                        <span className="text-gray-700 dark:text-gray-300">{gap}</span>
+              <div className="space-y-3">
+                {gaps.length > 0 ? (
+                  <ul className="space-y-2.5">
+                    {gaps.map((gap, i) => (
+                      <li key={i} className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-navy-800 rounded-xl border border-gray-200 dark:border-navy-700">
+                        <span className="flex-shrink-0 h-6 w-6 rounded-full bg-blue-500/10 text-blue-500 text-xs font-bold flex items-center justify-center">
+                          {i + 1}
+                        </span>
+                        <span className="text-sm text-gray-700 dark:text-gray-300">{gap}</span>
                       </li>
                     ))}
                   </ul>
-                ) : 'Research gaps will appear here after workflow completes.'}
+                ) : (
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">
+                    Research gaps will appear here after the gap analysis agent completes.
+                  </p>
+                )}
               </div>
             )}
+
             {activeTab === 'review' && (
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                {agentStatus?.result?.review ? (
-                  <div className="prose dark:prose-invert max-w-none">
-                    <pre className="whitespace-pre-wrap text-xs bg-gray-50 dark:bg-navy-800 p-4 rounded-xl overflow-auto max-h-80">
-                      {JSON.stringify(agentStatus.result.review, null, 2)}
-                    </pre>
+              <div className="space-y-4">
+                {review ? (
+                  <div className="p-6 bg-gray-50 dark:bg-navy-800 rounded-xl border border-gray-200 dark:border-navy-700 space-y-4 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                      {review.title || 'Synthesized Academic Literature Review'}
+                    </h3>
+                    {review.introduction && (
+                      <div>
+                        <h4 className="font-semibold text-blue-500 text-xs uppercase tracking-wider mb-1">Introduction</h4>
+                        <p>{review.introduction}</p>
+                      </div>
+                    )}
+                    {review.background && (
+                      <div>
+                        <h4 className="font-semibold text-blue-500 text-xs uppercase tracking-wider mb-1">Background</h4>
+                        <p>{review.background}</p>
+                      </div>
+                    )}
+                    {review.findings && (
+                      <div>
+                        <h4 className="font-semibold text-blue-500 text-xs uppercase tracking-wider mb-1">Key Findings</h4>
+                        <p className="whitespace-pre-line">{review.findings}</p>
+                      </div>
+                    )}
+                    {review.conclusion && (
+                      <div>
+                        <h4 className="font-semibold text-blue-500 text-xs uppercase tracking-wider mb-1">Conclusion</h4>
+                        <p>{review.conclusion}</p>
+                      </div>
+                    )}
+                    {review.references && Array.isArray(review.references) && review.references.length > 0 && (
+                      <div className="pt-2 border-t border-gray-200 dark:border-navy-700">
+                        <h4 className="font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider mb-2">References</h4>
+                        <ul className="space-y-1 text-xs text-gray-500 dark:text-gray-400">
+                          {review.references.map((ref: string, idx: number) => (
+                            <li key={idx}>[{idx + 1}] {ref}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
-                ) : 'Literature review will appear here after workflow completes.'}
+                ) : (
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">
+                    Literature review will appear here after the workflow completes.
+                  </p>
+                )}
               </div>
             )}
           </div>
