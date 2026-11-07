@@ -47,7 +47,13 @@ const STORAGE_KEYS = {
 function getStorage<T>(key: string, defaultValue: T): T {
   try {
     const val = localStorage.getItem(key);
-    return val ? JSON.parse(val) : defaultValue;
+    if (!val) return defaultValue;
+    const parsed = JSON.parse(val);
+    if (key === STORAGE_KEYS.PAPERS && Array.isArray(parsed)) {
+      // Purge any legacy mock papers with broken 10.1145 DOIs
+      return parsed.filter((p: any) => !p.doi?.includes('10.1145/10') && !p.url?.includes('10.1145/10')) as T;
+    }
+    return parsed;
   } catch {
     return defaultValue;
   }
@@ -112,9 +118,9 @@ function generateAcademicPapers(topic: string, count: number = 12): Paper[] {
       source,
       citations,
       keywords: [cleanTopic, 'machine learning', 'deep learning', 'optimization', 'empirical study'],
-      url: `https://doi.org/10.1145/${1000000 + i * 3421}`,
-      pdf_url: `https://arxiv.org/abs/240${i}.0${1000 + i}`,
-      doi: `10.1145/${1000000 + i * 3421}`,
+      url: `https://scholar.google.com/scholar?q=${encodeURIComponent(pTitle)}`,
+      pdf_url: `https://arxiv.org/search/?query=${encodeURIComponent(pTitle)}&searchtype=all`,
+      doi: undefined,
     });
   }
 
@@ -415,7 +421,19 @@ export const runAgentWorkflow = async (req: {
 
   // Run async progressive state advancement
   const topic = req.topic.trim();
-  const papers = generateAcademicPapers(topic, req.max_results || 8);
+  let papers: Paper[] = [];
+  try {
+    papers = await fetchOpenAlexDirect(topic, req.max_results || 8);
+  } catch {
+    // fallback
+  }
+  if (!papers || papers.length === 0) {
+    papers = generateAcademicPapers(topic, req.max_results || 8);
+  }
+  // Store real papers in localStorage so the whole app has access to them
+  const currentPapers = getStorage<Paper[]>(STORAGE_KEYS.PAPERS, []);
+  setStorage(STORAGE_KEYS.PAPERS, [...papers, ...currentPapers.filter((cp) => !papers.some((p) => p.id === cp.id))].slice(0, 100));
+
   const startTime = Date.now();
 
   const progressInterval = setInterval(() => {
@@ -612,7 +630,17 @@ export const generateLiteratureReview = async (req: {
   const reviewId = `rev-${Date.now()}`;
   const papers = getStorage<Paper[]>(STORAGE_KEYS.PAPERS, []);
   const selectedPapers = papers.filter((p) => req.paper_ids.includes(p.id)).slice(0, 10);
-  const usedPapers = selectedPapers.length > 0 ? selectedPapers : generateAcademicPapers(req.topic, 6);
+  let usedPapers = selectedPapers;
+  if (usedPapers.length === 0) {
+    try {
+      usedPapers = await fetchOpenAlexDirect(req.topic, 6);
+    } catch {
+      // ignore
+    }
+  }
+  if (!usedPapers || usedPapers.length === 0) {
+    usedPapers = generateAcademicPapers(req.topic, 6);
+  }
 
   const review: LiteratureReview = {
     id: reviewId,

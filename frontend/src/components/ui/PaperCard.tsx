@@ -96,34 +96,53 @@ export function PaperCard({ paper, onSave, showSelect = true }: PaperCardProps) 
 
       {/* Actions */}
       <div className="flex items-center gap-2 pt-2 border-t border-gray-100 dark:border-navy-800">
-        {paper.url && (
+        {(() => {
+          // Robust URL resolution: if url is a mock/broken DOI or missing, fall back to Google Scholar search
+          const isValidUrl = paper.url && !paper.url.includes('10.1145/10') && !paper.url.startsWith('https://doi.org/10.1145/10');
+          const targetUrl = isValidUrl ? paper.url : `https://scholar.google.com/scholar?q=${encodeURIComponent(paper.title)}`;
+          
+          return (
+            <a
+              href={targetUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+              title="Search and read paper"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              View
+            </a>
+          );
+        })()}
+
+        {(() => {
+          // If valid open-access PDF URL is present, open directly; otherwise search Google Scholar for PDF
+          const hasValidPdf = paper.pdf_url && !paper.pdf_url.includes('arxiv.org/abs/240') && paper.pdf_url.startsWith('http');
+          const pdfTarget = hasValidPdf 
+            ? paper.pdf_url 
+            : `https://scholar.google.com/scholar?q=${encodeURIComponent(paper.title + ' filetype:pdf')}`;
+
+          return (
+            <a
+              href={pdfTarget}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400 hover:underline"
+              title="Open full-text paper or PDF"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              PDF
+            </a>
+          );
+        })()}
+
+        {paper.doi && !paper.doi.includes('10.1145/10') && (
           <a
-            href={paper.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-            View
-          </a>
-        )}
-        {paper.pdf_url && (
-          <a
-            href={paper.pdf_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400 hover:underline"
-          >
-            <FileText className="h-3.5 w-3.5" />
-            PDF
-          </a>
-        )}
-        {paper.doi && (
-          <a
-            href={`https://doi.org/${paper.doi}`}
+            href={paper.doi.startsWith('http') ? paper.doi : `https://doi.org/${paper.doi}`}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1 text-xs text-gray-500 hover:underline"
+            title={`DOI: ${paper.doi}`}
           >
             DOI
           </a>
